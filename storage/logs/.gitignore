@@ -1,0 +1,12 @@
+*
+!.gitignore
+### Laravel ###
+vendor/
+node_modules/
+npm-debug.log
+public/storage
+public/hot
+storage/*.key
+.env.*.php
+.env.php
+.env
