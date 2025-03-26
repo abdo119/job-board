@@ -15,8 +15,6 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpFoundation\Response;
 
-ini_set('memory_limit', '1024M');
-gc_enable();
 class JobController extends Controller
 {
 

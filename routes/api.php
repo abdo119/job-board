@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\Job;
 use App\Services\JobFilterService;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\API\JobController;
@@ -17,13 +18,27 @@ use App\Http\Controllers\API\JobController;
 
 Route::prefix('v1')->group(function () {
     Route::get('/test/ss', function (\Illuminate\Http\Request $request) {
-        ini_set('memory_limit', '1024M');
-        gc_enable();
-        $filter  =$request->all();
-
-        $results = (new JobFilterService())->filter(['filter' => $filter['filter']]);
-
-        return $results;
+        $jobs = Job::query()
+            ->where('job_type', 'full-time')
+            ->whereHas('languages', function($query) {
+                $query->whereIn('name', ['PHP', 'JavaScript']);
+            })
+            ->whereHas('locations', function($query) {
+                $query->where(function($subQuery) {
+                    $subQuery->where('is_remote', true)
+                        ->orWhere('city', 'LIKE', '%New York%')
+                        ->orWhere('country', 'LIKE', '%New York%');
+                });
+            })
+            ->whereHas('attributeValues', function($query) {
+                $query->whereHas('attribute', function($subQuery) {
+                    $subQuery->where('name', 'years_experience');
+                })
+                    ->whereRaw('CAST(value AS DECIMAL(10,2)) >= ?', [3]);
+            })
+            ->with(['languages', 'locations', 'attributeValues.attribute'])
+            ->get();
+        return $jobs;
     });
     Route::get('/jobs', [JobController::class, 'index']);
     Route::post('/jobs/createJob', [JobController::class, 'store']);
