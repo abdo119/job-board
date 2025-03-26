@@ -53,7 +53,7 @@ class DatabaseSeeder extends Seeder
             $job->categories()->attach($categories->random(rand(1, 2))->pluck('id'));
 
             // Add attribute values
-            $job->attribute()->create([
+            $job->attributeValues()->create([
                 'attribute_id' => $attributes->firstWhere('name', 'years_experience')->id,
                 'value' => rand(1, 10)
             ]);

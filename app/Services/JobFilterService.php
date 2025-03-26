@@ -9,6 +9,20 @@ use InvalidArgumentException;
 
 class JobFilterService
 {
+    /**
+     * Main filter method that processes the request and returns filtered jobs
+     *
+     * @param array $params Request parameters containing 'filter' key
+     * @param array $with Relationships to eager load
+     * @param int|null $perPage Pagination items per page (null returns all)
+     * @return \Illuminate\Pagination\LengthAwarePaginator|\Illuminate\Database\Eloquent\Collection
+     *
+     * @throws \InvalidArgumentException|\Exception
+     *
+     * @example
+     * $service->filter(['filter' => 'salary_min>50000'], ['languages'], 10)
+     */
+
     public function filter(array $params, array $with = [], int $perPage = null)
     {
         try {
@@ -33,12 +47,32 @@ class JobFilterService
         }
     }
 
+    /**
+     * Parse the filter query string into an abstract syntax tree (AST)
+     *
+     * @param string $query Filter string from request
+     * @return array Parsed conditions array
+     *
+     * @throws \InvalidArgumentException
+     */
     private function parseFilterQuery(string $query): array
     {
         $tokens = $this->tokenizeFilterQuery($query);
         return $this->parseTokens($tokens);
     }
 
+    /**
+     * Convert filter string into lexical tokens
+     *
+     * @param string $query Input filter string
+     * @return array Array of token structures
+     *
+     * @throws \InvalidArgumentException
+     *
+     * @example
+     * Input:  "salary_min>50000 AND (locations IS_ANY(Remote))"
+     * Output: Array of tokens with type/value pairs
+     */
     private function tokenizeFilterQuery(string $query): array
     {
         $tokens = [];
@@ -95,6 +129,15 @@ class JobFilterService
         return $tokens;
     }
 
+    /**
+     * Convert tokens into nested condition structure (AST)
+     *
+     * @param array $tokens Token array from tokenizeFilterQuery
+     * @param int &$index Current token index (used recursively)
+     * @return array Structured conditions array
+     *
+     * @throws \InvalidArgumentException
+     */
     private function parseTokens(array $tokens, int &$index = 0): array
     {
         $conditions = [];
@@ -140,6 +183,13 @@ class JobFilterService
         return $conditions;
     }
 
+    /**
+     * Recursively apply conditions to Eloquent query builder
+     *
+     * @param Builder $query Query builder instance
+     * @param array $conditions Parsed conditions structure
+     * @param string $logical Default logical operator (AND/OR)
+     */
     private function applyConditionsToQuery(Builder $query, array $conditions, string $logical = 'AND'): void
     {
         foreach ($conditions as $condition) {
@@ -155,6 +205,15 @@ class JobFilterService
         }
     }
 
+    /**
+     * Apply individual condition to query builder
+     *
+     * @param Builder $query Query builder instance
+     * @param array $condition Single condition structure
+     * @param string $logical Logical operator (AND/OR)
+     *
+     * @throws \InvalidArgumentException
+     */
     private function applyCondition(Builder $query, array $condition, string $logical = 'AND'): void
     {
         $method = $logical === 'OR' ? 'orWhere' : 'where';
@@ -194,6 +253,13 @@ class JobFilterService
         }
     }
 
+    /**
+     * Handle languages relationship filter (HAS_ANY)
+     *
+     * @param Builder $query Query builder
+     * @param string $method Where/orWhere method
+     * @param mixed $value Array or single value
+     */
     private function applyLanguagesCondition(Builder $query, string $method, $value): void
     {
         $query->{$method . 'Has'}('languages', function ($q) use ($value) {
@@ -201,6 +267,17 @@ class JobFilterService
         });
     }
 
+    /**
+     * Handle locations filter with special Remote handling
+     *
+     * @param Builder $query Query builder
+     * @param string $method Where/orWhere method
+     * @param mixed $value Location criteria
+     *
+     * @example
+     * IS_ANY(Remote,New York) converts to:
+     * WHERE (is_remote = 1 OR city LIKE '%New York%')
+     */
     private function applyLocationsCondition(Builder $query, string $method, $value): void
     {
         $query->{$method . 'Has'}('locations', function ($q) use ($value) {
@@ -219,6 +296,15 @@ class JobFilterService
         });
     }
 
+    /**
+     * Handle EAV attributes through attributeValues relationship
+     *
+     * @param Builder $query Query builder
+     * @param string $method Where/orWhere method
+     * @param string $field Field in format "attribute:name"
+     * @param string $operator Comparison operator
+     * @param mixed $value Filter value
+     */
     private function applyEavCondition(Builder $query, string $method, string $field, string $operator, $value): void
     {
         [$relation, $attribute] = explode(':', $field);
@@ -232,6 +318,16 @@ class JobFilterService
         });
     }
 
+
+    /**
+     * Handle standard field comparisons
+     *
+     * @param Builder $query Query builder
+     * @param string $method Where/orWhere method
+     * @param string $field Database column
+     * @param string $operator Comparison operator
+     * @param mixed $value Filter value
+     */
     private function applyStandardCondition(Builder $query, string $method, string $field, string $operator, $value): void
     {
         if (is_array($value) && in_array($operator, ['HAS_ANY', 'IS_ANY'])) {
@@ -240,6 +336,7 @@ class JobFilterService
             $query->{$method}($field, $this->normalizeOperator($operator), $value);
         }
     }
+
 
     private function applyValueCondition(Builder $query, string $operator, $value): void
     {
@@ -252,12 +349,28 @@ class JobFilterService
             $query->where('value', $this->normalizeOperator($operator), $value);
         }
     }
+    /**
+     * Handle category relationships filter (HAS_ANY)
+     *
+     * @param Builder $query Query builder
+     * @param string $method Where/orWhere method
+     * @param mixed $value Array or single value
+     */
+
     private function applyCategoriesCondition(Builder $query, string $method, $value): void
     {
         $query->{$method . 'Has'}('categories', function ($q) use ($value) {
             $q->whereIn('name', (array)$value);
         });
     }
+
+
+    /**
+     * Normalize operator symbols for database compatibility
+     *
+     * @param string $operator Input operator
+     * @return string Normalized operator
+     */
     private function normalizeOperator(string $operator): string
     {
         return match ($operator) {
@@ -267,3 +380,46 @@ class JobFilterService
         };
     }
 }
+
+
+
+
+// Complex Query
+//GET /api/jobs?filter=(job_type=full-time AND
+//    (languages HAS_ANY (PHP,JavaScript))) AND (locations IS_ANY
+//(New York,Remote)) AND attribute:years_experience>=3
+
+
+//The code processes this as:
+// First Step
+//[
+//    ['type' => 'paren', 'value' => '('],
+//    ['type' => 'condition', 'field' => 'job_type', ...],
+//    ['type' => 'logical', 'value' => 'AND'],
+//    // ... other tokens
+//]
+
+//Second Step -->
+//[
+//    'type' => 'group',
+//    'conditions' => [
+//        ['field' => 'job_type', 'operator' => '=', ...],
+//        [
+//            'type' => 'group',
+//            'conditions' => [/* languages condition */],
+//            'logical' => 'AND'
+//        ]
+//    ],
+//    'logical' => 'AND'
+//]
+
+// Final Step
+
+//WHERE (
+//    job_type = 'full-time' AND
+//    EXISTS (/* languages subquery */)
+//) AND (
+//EXISTS (/* locations subquery */)
+//) AND (
+//EXISTS (/* attribute values subquery */)
+//)

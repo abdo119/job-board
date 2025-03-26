@@ -73,9 +73,9 @@ class JobController extends Controller
     /**
      * Remove the specified job.
      */
-    public function destroy(Job $job)
+    public function destroy($job)
     {
-        $this->jobService = new JobService();
+        $this->jobService = new JobService($job);
         return $this->jobService->destroy($job);
     }
     protected function handleRelationships($request, $job)

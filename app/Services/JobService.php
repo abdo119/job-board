@@ -84,12 +84,19 @@ class JobService
     /**
      * Remove the specified job.
      */
-    public function destroy(Job $job)
+    public function destroy($job)
     {
         try {
-            $job->delete();
-            return response()->json(null, Response::HTTP_NO_CONTENT);
-        } catch (\Exception $e) {
+            DB::beginTransaction();
+            $deletedJob = DB::table('jobs')->where('id', $job)->get();
+
+            if($deletedJob->count() > 0){
+                DB::table('jobs')->where('id',$job)->delete();
+                DB::commit();
+                return response()->json("Deleted Successfully!", Response::HTTP_OK);
+            }else
+                return response()->json("Id not found !", Response::HTTP_BAD_REQUEST);
+           } catch (\Exception $e) {
             return response()->json([
                 'error' => 'Job deletion failed: ' . $e->getMessage()
             ], Response::HTTP_INTERNAL_SERVER_ERROR);
